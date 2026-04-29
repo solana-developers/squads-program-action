@@ -156276,6 +156276,20 @@ function numberEncoderFactory(input) {
     }
   });
 }
+var getU16Encoder = (config = {}) => numberEncoderFactory({
+  config,
+  name: "u16",
+  range: [0, Number("0xffff")],
+  set: (view, value, le) => view.setUint16(0, Number(value), le),
+  size: 2
+});
+var getU32Encoder = (config = {}) => numberEncoderFactory({
+  config,
+  name: "u32",
+  range: [0, Number("0xffffffff")],
+  set: (view, value, le) => view.setUint32(0, Number(value), le),
+  size: 4
+});
 var getU8Encoder = () => numberEncoderFactory({
   name: "u8",
   range: [0, Number("0xff")],
@@ -167594,6 +167608,119 @@ function getAccountMetaFactory(programAddress, optionalAccountStrategy) {
 function isTransactionSigner(value) {
   return !!value && typeof value === "object" && "address" in value && isTransactionSigner$1(value);
 }
+
+// src/generated/instructions/allocate.ts
+var ALLOCATE_DISCRIMINATOR = 7;
+function getAllocateInstructionDataEncoder() {
+  return transformEncoder(
+    getStructEncoder([
+      ["discriminator", getU8Encoder()],
+      ["seed", getOptionEncoder(getSeedEncoder(), { prefix: null })]
+    ]),
+    (value) => ({ ...value, discriminator: ALLOCATE_DISCRIMINATOR, seed: value.seed ?? none() })
+  );
+}
+function getAllocateInstruction(input, config) {
+  const programAddress = PROGRAM_METADATA_PROGRAM_ADDRESS;
+  const originalAccounts = {
+    buffer: { value: input.buffer ?? null, isWritable: true },
+    authority: { value: input.authority ?? null, isWritable: false },
+    program: { value: input.program ?? null, isWritable: false },
+    programData: { value: input.programData ?? null, isWritable: false },
+    system: { value: input.system ?? null, isWritable: false }
+  };
+  const accounts = originalAccounts;
+  const args = { ...input };
+  if (!accounts.system.value) {
+    accounts.system.value = "11111111111111111111111111111111";
+  }
+  const getAccountMeta = getAccountMetaFactory(programAddress);
+  return Object.freeze({
+    accounts: [
+      getAccountMeta(accounts.buffer),
+      getAccountMeta(accounts.authority),
+      getAccountMeta(accounts.program),
+      getAccountMeta(accounts.programData),
+      getAccountMeta(accounts.system)
+    ],
+    data: getAllocateInstructionDataEncoder().encode(args),
+    programAddress
+  });
+}
+var EXTEND_DISCRIMINATOR = 8;
+function getExtendInstructionDataEncoder() {
+  return transformEncoder(
+    getStructEncoder([
+      ["discriminator", getU8Encoder()],
+      ["length", getU16Encoder()]
+    ]),
+    (value) => ({ ...value, discriminator: EXTEND_DISCRIMINATOR })
+  );
+}
+function getExtendInstruction(input, config) {
+  const programAddress = PROGRAM_METADATA_PROGRAM_ADDRESS;
+  const originalAccounts = {
+    account: { value: input.account ?? null, isWritable: true },
+    authority: { value: input.authority ?? null, isWritable: false },
+    program: { value: input.program ?? null, isWritable: false },
+    programData: { value: input.programData ?? null, isWritable: false }
+  };
+  const accounts = originalAccounts;
+  const args = { ...input };
+  const getAccountMeta = getAccountMetaFactory(programAddress);
+  return Object.freeze({
+    accounts: [
+      getAccountMeta(accounts.account),
+      getAccountMeta(accounts.authority),
+      getAccountMeta(accounts.program),
+      getAccountMeta(accounts.programData)
+    ],
+    data: getExtendInstructionDataEncoder().encode(args),
+    programAddress
+  });
+}
+var INITIALIZE_DISCRIMINATOR = 1;
+function getInitializeInstructionDataEncoder() {
+  return transformEncoder(
+    getStructEncoder([
+      ["discriminator", getU8Encoder()],
+      ["seed", getSeedEncoder()],
+      ["encoding", getEncodingEncoder()],
+      ["compression", getCompressionEncoder()],
+      ["format", getFormatEncoder()],
+      ["dataSource", getDataSourceEncoder()],
+      ["data", getOptionEncoder(getBytesEncoder(), { prefix: null })]
+    ]),
+    (value) => ({ ...value, discriminator: INITIALIZE_DISCRIMINATOR, data: value.data ?? none() })
+  );
+}
+function getInitializeInstruction(input, config) {
+  const programAddress = PROGRAM_METADATA_PROGRAM_ADDRESS;
+  const originalAccounts = {
+    metadata: { value: input.metadata ?? null, isWritable: true },
+    authority: { value: input.authority ?? null, isWritable: false },
+    program: { value: input.program ?? null, isWritable: false },
+    programData: { value: input.programData ?? null, isWritable: false },
+    system: { value: input.system ?? null, isWritable: false }
+  };
+  const accounts = originalAccounts;
+  const args = { ...input };
+  if (!accounts.system.value) {
+    accounts.system.value = "11111111111111111111111111111111";
+  }
+  const getAccountMeta = getAccountMetaFactory(programAddress);
+  return Object.freeze({
+    accounts: [
+      getAccountMeta(accounts.metadata),
+      getAccountMeta(accounts.authority),
+      getAccountMeta(accounts.program),
+      getAccountMeta(accounts.programData),
+      getAccountMeta(accounts.system)
+    ],
+    data: getInitializeInstructionDataEncoder().encode(args),
+    programAddress
+  });
+}
 var SET_DATA_DISCRIMINATOR = 3;
 function getSetDataInstructionDataEncoder() {
   return transformEncoder(
@@ -167632,7 +167759,40 @@ function getSetDataInstruction(input, config) {
     programAddress
   });
 }
+var WRITE_DISCRIMINATOR = 0;
+function getWriteInstructionDataEncoder() {
+  return transformEncoder(
+    getStructEncoder([
+      ["discriminator", getU8Encoder()],
+      ["offset", getU32Encoder()],
+      ["data", getOptionEncoder(getBytesEncoder(), { prefix: null })]
+    ]),
+    (value) => ({ ...value, discriminator: WRITE_DISCRIMINATOR, data: value.data ?? none() })
+  );
+}
+function getWriteInstruction(input, config) {
+  const programAddress = PROGRAM_METADATA_PROGRAM_ADDRESS;
+  const originalAccounts = {
+    buffer: { value: input.buffer ?? null, isWritable: true },
+    authority: { value: input.authority ?? null, isWritable: false },
+    sourceBuffer: { value: input.sourceBuffer ?? null, isWritable: false }
+  };
+  const accounts = originalAccounts;
+  const args = { ...input };
+  const getAccountMeta = getAccountMetaFactory(programAddress);
+  return Object.freeze({
+    accounts: [
+      getAccountMeta(accounts.buffer),
+      getAccountMeta(accounts.authority),
+      getAccountMeta(accounts.sourceBuffer)
+    ],
+    data: getWriteInstructionDataEncoder().encode(args),
+    programAddress
+  });
+}
+var ACCOUNT_HEADER_LENGTH = 96;
 
+const REALLOC_LIMIT = 10240;
 const BPF_UPGRADE_LOADER_ID = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
 async function main({ rpc, program, buffer, idlBuffer, metadataBuffer, multisig: multisigAddress, keypair, vaultIndex, priorityFee, pdaTx }) {
     const keypairObj = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(keypair)));
@@ -167684,10 +167844,10 @@ async function main({ rpc, program, buffer, idlBuffer, metadataBuffer, multisig:
         instructions.push(idlUpgradeIx);
         memo += ' with Anchor IDL update';
     }
-    // Add program-metadata IDL instruction if metadata buffer is provided
+    // Add program-metadata IDL instruction(s) if metadata buffer is provided
     if (metadataBufferObj) {
-        const metadataIx = await createMetadataSetDataInstruction(programId, metadataBufferObj, vaultPda);
-        instructions.push(metadataIx);
+        const metadataIxs = await createMetadataInstructions(connection, programId, metadataBufferObj, vaultPda);
+        instructions.push(...metadataIxs);
         memo += ' with program-metadata IDL update';
     }
     // Add program upgrade instruction
@@ -167740,35 +167900,7 @@ async function main({ rpc, program, buffer, idlBuffer, metadataBuffer, multisig:
         process.exit(1);
     }
 }
-async function createMetadataSetDataInstruction(programId, bufferAddress, authority) {
-    const programAddr = programId.toBase58();
-    const bufferAddr = bufferAddress.toBase58();
-    const authorityAddr = authority.toBase58();
-    const [metadataPda] = await findCanonicalPda({
-        program: programAddr,
-        seed: 'idl'
-    });
-    const [programDataAddress] = await PublicKey.findProgramAddress([programId.toBuffer()], BPF_UPGRADE_LOADER_ID);
-    console.log('\n=== Program Metadata Info ===');
-    console.log('Metadata PDA:', metadataPda);
-    console.log('Buffer:', bufferAddr);
-    console.log('Program Data:', programDataAddress.toString());
-    // Vault signs via the multisig mechanism, not directly here
-    const authoritySigner = {
-        address: authorityAddr
-    };
-    const ix = getSetDataInstruction({
-        metadata: metadataPda,
-        authority: authoritySigner,
-        buffer: bufferAddr,
-        program: programAddr,
-        programData: programDataAddress.toBase58(),
-        encoding: Encoding.Utf8,
-        compression: Compression.Zlib,
-        format: Format.Json,
-        dataSource: DataSource.Direct
-    });
-    // Convert Kit instruction to web3.js TransactionInstruction
+function kitIxToWeb3(ix) {
     return new TransactionInstruction({
         programId: new PublicKey(ix.programAddress),
         keys: ix.accounts.map((acc) => ({
@@ -167778,6 +167910,104 @@ async function createMetadataSetDataInstruction(programId, bufferAddress, author
         })),
         data: Buffer.from(ix.data)
     });
+}
+async function createMetadataInstructions(connection, programId, bufferAddress, authority) {
+    const programAddr = programId.toBase58();
+    const bufferAddr = bufferAddress.toBase58();
+    const authorityAddr = authority.toBase58();
+    const [metadataPda] = await findCanonicalPda({
+        program: programAddr,
+        seed: 'idl'
+    });
+    const [programDataAddress] = await PublicKey.findProgramAddress([programId.toBuffer()], BPF_UPGRADE_LOADER_ID);
+    const metadataPdaPubkey = new PublicKey(metadataPda);
+    const programDataAddr = programDataAddress.toBase58();
+    console.log('\n=== Program Metadata Info ===');
+    console.log('Metadata PDA:', metadataPda);
+    console.log('Buffer:', bufferAddr);
+    console.log('Program Data:', programDataAddress.toString());
+    const authoritySigner = {
+        address: authorityAddr
+    };
+    const metadataAccount = await getAccountInfoWithRetry(connection, metadataPdaPubkey);
+    if (metadataAccount) {
+        console.log('Metadata account exists, updating via SetData');
+        return [
+            kitIxToWeb3(getSetDataInstruction({
+                metadata: metadataPda,
+                authority: authoritySigner,
+                buffer: bufferAddr,
+                program: programAddr,
+                programData: programDataAddr,
+                encoding: Encoding.Utf8,
+                compression: Compression.Zlib,
+                format: Format.Json,
+                dataSource: DataSource.Direct
+            }))
+        ];
+    }
+    // Metadata account does not exist — follow the SDK's create flow:
+    // Transfer -> Allocate -> Extend (if needed) -> Write -> Initialize
+    console.log('Metadata account does not exist, adding init instructions');
+    const bufferAccount = await getAccountInfoWithRetry(connection, bufferAddress);
+    if (!bufferAccount) {
+        throw new Error(`Could not fetch metadata buffer account ${bufferAddress.toString()}`);
+    }
+    const dataLength = bufferAccount.data.length > ACCOUNT_HEADER_LENGTH
+        ? bufferAccount.data.length - ACCOUNT_HEADER_LENGTH
+        : bufferAccount.data.length;
+    const accountSize = BigInt(ACCOUNT_HEADER_LENGTH) + BigInt(dataLength);
+    const rentLamports = await connection.getMinimumBalanceForRentExemption(Number(accountSize));
+    const instructions = [];
+    // 1. Fund the metadata PDA with rent
+    instructions.push(SystemProgram.transfer({
+        fromPubkey: authority,
+        toPubkey: metadataPdaPubkey,
+        lamports: rentLamports
+    }));
+    // 2. Allocate the PDA as a program-metadata buffer
+    instructions.push(kitIxToWeb3(getAllocateInstruction({
+        buffer: metadataPda,
+        authority: authoritySigner,
+        program: programAddr,
+        programData: programDataAddr,
+        seed: 'idl'
+    })));
+    // 3. Extend if data exceeds the realloc limit (10KB per instruction)
+    if (dataLength > REALLOC_LIMIT) {
+        let remaining = dataLength;
+        while (remaining > 0) {
+            const chunk = Math.min(remaining, REALLOC_LIMIT);
+            instructions.push(kitIxToWeb3(getExtendInstruction({
+                account: metadataPda,
+                authority: authoritySigner,
+                program: programAddr,
+                programData: programDataAddr,
+                length: chunk
+            })));
+            remaining -= chunk;
+        }
+    }
+    // 4. Write data from the source buffer into the PDA buffer
+    instructions.push(kitIxToWeb3(getWriteInstruction({
+        buffer: metadataPda,
+        authority: authoritySigner,
+        sourceBuffer: bufferAddr,
+        offset: 0
+    })));
+    // 5. Initialize — converts the pre-allocated buffer into a metadata account
+    instructions.push(kitIxToWeb3(getInitializeInstruction({
+        metadata: metadataPda,
+        authority: authoritySigner,
+        program: programAddr,
+        programData: programDataAddr,
+        seed: 'idl',
+        encoding: Encoding.Utf8,
+        compression: Compression.Zlib,
+        format: Format.Json,
+        dataSource: DataSource.Direct
+    })));
+    return instructions;
 }
 async function createIdlUpgradeInstruction(programId, bufferAddress, upgradeAuthority) {
     const idlAddr = await idlExports.idlAddress(programId);

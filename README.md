@@ -68,9 +68,9 @@ Before using this action, you need:
 4. Keypair with permission to create transactions in the multisig
 
 > **Note:** Both `idl-buffer` (Anchor) and `metadata-buffer` (program-metadata)
-> assume the IDL/metadata account has already been initialized. The initial setup
-> is typically done during the first deploy before transferring authority to the
-> multisig.
+> assume the IDL/metadata account has already been initialized. The initial
+> setup is typically done during the first deploy before transferring authority
+> to the multisig.
 
 ## Example Workflow (Anchor IDL)
 

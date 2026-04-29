@@ -7,19 +7,27 @@ import {
   SYSVAR_CLOCK_PUBKEY,
   SYSVAR_RENT_PUBKEY,
   TransactionInstruction,
-  Transaction
+  Transaction,
+  SystemProgram
 } from '@solana/web3.js'
 import { idlAddress } from '@coral-xyz/anchor/dist/cjs/idl.js'
 import { sendTransaction } from './transaction-helpers.js'
 import {
+  ACCOUNT_HEADER_LENGTH,
   findCanonicalPda,
+  getAllocateInstruction,
+  getExtendInstruction,
+  getInitializeInstruction,
   getSetDataInstruction,
+  getWriteInstruction,
   Compression,
   DataSource,
   Encoding,
   Format
 } from '@solana-program/program-metadata'
 import type { Address, TransactionSigner } from '@solana/kit'
+
+const REALLOC_LIMIT = 10240
 
 const BPF_UPGRADE_LOADER_ID = new PublicKey(
   'BPFLoaderUpgradeab1e11111111111111111111111'
@@ -120,14 +128,15 @@ export async function main({
     memo += ' with Anchor IDL update'
   }
 
-  // Add program-metadata IDL instruction if metadata buffer is provided
+  // Add program-metadata IDL instruction(s) if metadata buffer is provided
   if (metadataBufferObj) {
-    const metadataIx = await createMetadataSetDataInstruction(
+    const metadataIxs = await createMetadataInstructions(
+      connection,
       programId,
       metadataBufferObj,
       vaultPda
     )
-    instructions.push(metadataIx)
+    instructions.push(...metadataIxs)
     memo += ' with program-metadata IDL update'
   }
 
@@ -199,11 +208,28 @@ export async function main({
   }
 }
 
-async function createMetadataSetDataInstruction(
+function kitIxToWeb3(ix: {
+  programAddress: string
+  accounts: readonly unknown[]
+  data: ArrayLike<number>
+}): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: new PublicKey(ix.programAddress),
+    keys: (ix.accounts as { address: string; role: number }[]).map((acc) => ({
+      pubkey: new PublicKey(acc.address),
+      isSigner: (acc.role & 2) !== 0,
+      isWritable: (acc.role & 1) !== 0
+    })),
+    data: Buffer.from(ix.data as unknown as Uint8Array)
+  })
+}
+
+async function createMetadataInstructions(
+  connection: Connection,
   programId: PublicKey,
   bufferAddress: PublicKey,
   authority: PublicKey
-): Promise<TransactionInstruction> {
+): Promise<TransactionInstruction[]> {
   const programAddr = programId.toBase58() as Address
   const bufferAddr = bufferAddress.toBase58() as Address
   const authorityAddr = authority.toBase58() as Address
@@ -218,38 +244,136 @@ async function createMetadataSetDataInstruction(
     BPF_UPGRADE_LOADER_ID
   )
 
+  const metadataPdaPubkey = new PublicKey(metadataPda)
+  const programDataAddr = programDataAddress.toBase58() as Address
+
   console.log('\n=== Program Metadata Info ===')
   console.log('Metadata PDA:', metadataPda)
   console.log('Buffer:', bufferAddr)
   console.log('Program Data:', programDataAddress.toString())
 
-  // Vault signs via the multisig mechanism, not directly here
   const authoritySigner = {
     address: authorityAddr
   } as TransactionSigner
 
-  const ix = getSetDataInstruction({
-    metadata: metadataPda,
-    authority: authoritySigner,
-    buffer: bufferAddr,
-    program: programAddr,
-    programData: programDataAddress.toBase58() as Address,
-    encoding: Encoding.Utf8,
-    compression: Compression.Zlib,
-    format: Format.Json,
-    dataSource: DataSource.Direct
-  })
+  const metadataAccount = await getAccountInfoWithRetry(
+    connection,
+    metadataPdaPubkey
+  )
 
-  // Convert Kit instruction to web3.js TransactionInstruction
-  return new TransactionInstruction({
-    programId: new PublicKey(ix.programAddress),
-    keys: (ix.accounts as { address: string; role: number }[]).map((acc) => ({
-      pubkey: new PublicKey(acc.address),
-      isSigner: (acc.role & 2) !== 0,
-      isWritable: (acc.role & 1) !== 0
-    })),
-    data: Buffer.from(ix.data)
-  })
+  if (metadataAccount) {
+    console.log('Metadata account exists, updating via SetData')
+    return [
+      kitIxToWeb3(
+        getSetDataInstruction({
+          metadata: metadataPda,
+          authority: authoritySigner,
+          buffer: bufferAddr,
+          program: programAddr,
+          programData: programDataAddr,
+          encoding: Encoding.Utf8,
+          compression: Compression.Zlib,
+          format: Format.Json,
+          dataSource: DataSource.Direct
+        })
+      )
+    ]
+  }
+
+  // Metadata account does not exist — follow the SDK's create flow:
+  // Transfer -> Allocate -> Extend (if needed) -> Write -> Initialize
+  console.log('Metadata account does not exist, adding init instructions')
+
+  const bufferAccount = await getAccountInfoWithRetry(connection, bufferAddress)
+  if (!bufferAccount) {
+    throw new Error(
+      `Could not fetch metadata buffer account ${bufferAddress.toString()}`
+    )
+  }
+
+  const dataLength =
+    bufferAccount.data.length > ACCOUNT_HEADER_LENGTH
+      ? bufferAccount.data.length - ACCOUNT_HEADER_LENGTH
+      : bufferAccount.data.length
+  const accountSize = BigInt(ACCOUNT_HEADER_LENGTH) + BigInt(dataLength)
+  const rentLamports = await connection.getMinimumBalanceForRentExemption(
+    Number(accountSize)
+  )
+
+  const instructions: TransactionInstruction[] = []
+
+  // 1. Fund the metadata PDA with rent
+  instructions.push(
+    SystemProgram.transfer({
+      fromPubkey: authority,
+      toPubkey: metadataPdaPubkey,
+      lamports: rentLamports
+    })
+  )
+
+  // 2. Allocate the PDA as a program-metadata buffer
+  instructions.push(
+    kitIxToWeb3(
+      getAllocateInstruction({
+        buffer: metadataPda,
+        authority: authoritySigner,
+        program: programAddr,
+        programData: programDataAddr,
+        seed: 'idl'
+      })
+    )
+  )
+
+  // 3. Extend if data exceeds the realloc limit (10KB per instruction)
+  if (dataLength > REALLOC_LIMIT) {
+    let remaining = dataLength
+    while (remaining > 0) {
+      const chunk = Math.min(remaining, REALLOC_LIMIT)
+      instructions.push(
+        kitIxToWeb3(
+          getExtendInstruction({
+            account: metadataPda,
+            authority: authoritySigner,
+            program: programAddr,
+            programData: programDataAddr,
+            length: chunk
+          })
+        )
+      )
+      remaining -= chunk
+    }
+  }
+
+  // 4. Write data from the source buffer into the PDA buffer
+  instructions.push(
+    kitIxToWeb3(
+      getWriteInstruction({
+        buffer: metadataPda,
+        authority: authoritySigner,
+        sourceBuffer: bufferAddr,
+        offset: 0
+      })
+    )
+  )
+
+  // 5. Initialize — converts the pre-allocated buffer into a metadata account
+  instructions.push(
+    kitIxToWeb3(
+      getInitializeInstruction({
+        metadata: metadataPda,
+        authority: authoritySigner,
+        program: programAddr,
+        programData: programDataAddr,
+        seed: 'idl',
+        encoding: Encoding.Utf8,
+        compression: Compression.Zlib,
+        format: Format.Json,
+        dataSource: DataSource.Direct
+      })
+    )
+  )
+
+  return instructions
 }
 
 async function createIdlUpgradeInstruction(
