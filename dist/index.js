@@ -167929,7 +167929,7 @@ async function createMetadataInstructions(connection, programId, bufferAddress, 
     const authoritySigner = {
         address: authorityAddr
     };
-    const metadataAccount = await getAccountInfoWithRetry(connection, metadataPdaPubkey);
+    const metadataAccount = await connection.getAccountInfo(metadataPdaPubkey, 'confirmed');
     if (metadataAccount) {
         console.log('Metadata account exists, updating via SetData');
         return [
@@ -167949,9 +167949,10 @@ async function createMetadataInstructions(connection, programId, bufferAddress, 
     // Metadata account does not exist — follow the SDK's create flow:
     // Transfer -> Allocate -> Extend (if needed) -> Write -> Initialize
     console.log('Metadata account does not exist, adding init instructions');
-    const bufferAccount = await getAccountInfoWithRetry(connection, bufferAddress);
+    const bufferAccount = await connection.getAccountInfo(bufferAddress, 'confirmed');
     if (!bufferAccount) {
-        throw new Error(`Could not fetch metadata buffer account ${bufferAddress.toString()}`);
+        throw new Error(`Metadata buffer account ${bufferAddress.toString()} not found. ` +
+            'Make sure the buffer was created and is on the correct cluster.');
     }
     const dataLength = bufferAccount.data.length > ACCOUNT_HEADER_LENGTH
         ? bufferAccount.data.length - ACCOUNT_HEADER_LENGTH

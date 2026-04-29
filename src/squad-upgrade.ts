@@ -256,9 +256,9 @@ async function createMetadataInstructions(
     address: authorityAddr
   } as TransactionSigner
 
-  const metadataAccount = await getAccountInfoWithRetry(
-    connection,
-    metadataPdaPubkey
+  const metadataAccount = await connection.getAccountInfo(
+    metadataPdaPubkey,
+    'confirmed'
   )
 
   if (metadataAccount) {
@@ -284,10 +284,14 @@ async function createMetadataInstructions(
   // Transfer -> Allocate -> Extend (if needed) -> Write -> Initialize
   console.log('Metadata account does not exist, adding init instructions')
 
-  const bufferAccount = await getAccountInfoWithRetry(connection, bufferAddress)
+  const bufferAccount = await connection.getAccountInfo(
+    bufferAddress,
+    'confirmed'
+  )
   if (!bufferAccount) {
     throw new Error(
-      `Could not fetch metadata buffer account ${bufferAddress.toString()}`
+      `Metadata buffer account ${bufferAddress.toString()} not found. ` +
+        'Make sure the buffer was created and is on the correct cluster.'
     )
   }
 
