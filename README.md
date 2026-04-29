@@ -12,7 +12,9 @@ will automatically handle the build, upload, and verify steps.
 
 - Creates a Squads multisig transaction containing:
   - Program upgrade instruction using a new buffer
-  - IDL upgrade instruction using a new IDL buffer
+  - Anchor IDL upgrade instruction using an IDL buffer
+  - Program-metadata IDL update using a metadata buffer (alternative to Anchor
+    IDL, works with any program)
   - Optional PDA verification instruction
 - Handles automatic retries for RPC connections
 - Supports custom RPC endpoints
@@ -21,7 +23,7 @@ will automatically handle the build, upload, and verify steps.
 ## Usage
 
 ```yaml
-- uses: Woody4618/squads-program-action@v0.3.0
+- uses: Woody4618/squads-program-action@v0.4.0
   with:
     # Required: RPC URL for Solana
     rpc: ${{ secrets.RPC_URL }}
@@ -32,8 +34,11 @@ will automatically handle the build, upload, and verify steps.
     # Required: Buffer containing the new program
     buffer: 7SGJSG8aoZj39NeAkZvbUvsPDMRcUUrhRhPzgzKv7743
 
-    # Optional: Buffer containing the new IDL
+    # Optional: Buffer containing the new Anchor IDL
     idl-buffer: E74BKk75nHtSScZJ4YZ5gB2orvhdzLjcFyxyqkNx6MNc
+
+    # Optional: Buffer containing the new IDL via program-metadata (alternative to idl-buffer)
+    # metadata-buffer: <address from write-metadata-buffer action>
 
     # Required: Squads multisig address
     multisig: ${{ secrets.MULTISIG }}
@@ -59,10 +64,15 @@ Before using this action, you need:
    - Program upgrade authority
    - Required members set up
 2. Program buffer uploaded to Solana
-3. IDL buffer uploaded to Solana
+3. IDL buffer uploaded to Solana (either Anchor IDL or program-metadata buffer)
 4. Keypair with permission to create transactions in the multisig
 
-## Example Workflow
+> **Note:** Both `idl-buffer` (Anchor) and `metadata-buffer` (program-metadata)
+> assume the IDL/metadata account has already been initialized. The initial setup
+> is typically done during the first deploy before transferring authority to the
+> multisig.
+
+## Example Workflow (Anchor IDL)
 
 ```yaml
 name: Upgrade Program
@@ -81,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Woody4618/squads-program-action@main
+      - uses: Woody4618/squads-program-action@v0.4.0
         with:
           rpc: ${{ secrets.RPC_URL }}
           program: BhV84MZrRnEvtWLdWMRJGJr1GbusxfVMHAwc3pq92g4z
@@ -89,9 +99,49 @@ jobs:
           idl-buffer: ${{ inputs.idl-buffer }}
           multisig: ${{ secrets.MULTISIG }}
           keypair: ${{ secrets.KEYPAIR }}
-          # Optional: Increase priority fee for faster processing
           priority-fee: 200000
-          # Optional: Use a different vault index
+          vault-index: 0
+```
+
+## Example Workflow (Program Metadata IDL)
+
+Use this approach for non-Anchor programs or as a modern alternative to Anchor
+IDL. Requires the
+[write-metadata-buffer](https://github.com/solana-developers/github-actions)
+action to create the buffer first.
+
+```yaml
+name: Upgrade Program
+on:
+  workflow_dispatch:
+    inputs:
+      buffer:
+        description: 'Program buffer address'
+        required: true
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: solana-developers/github-actions/write-metadata-buffer@pmp-upload
+        id: metadata-buffer
+        with:
+          idl-path: ./target/idl/my_program.json
+          rpc-url: ${{ secrets.RPC_URL }}
+          keypair: ${{ secrets.DEPLOYER_KEYPAIR }}
+          buffer-authority: ${{ secrets.SQUADS_VAULT }}
+
+      - uses: Woody4618/squads-program-action@v0.4.0
+        with:
+          rpc: ${{ secrets.RPC_URL }}
+          program: BhV84MZrRnEvtWLdWMRJGJr1GbusxfVMHAwc3pq92g4z
+          buffer: ${{ inputs.buffer }}
+          metadata-buffer: ${{ steps.metadata-buffer.outputs.buffer }}
+          multisig: ${{ secrets.MULTISIG }}
+          keypair: ${{ secrets.KEYPAIR }}
+          priority-fee: 200000
           vault-index: 0
 ```
 
