@@ -167932,19 +167932,57 @@ async function createMetadataInstructions(connection, programId, bufferAddress, 
     const metadataAccount = await connection.getAccountInfo(metadataPdaPubkey, 'confirmed');
     if (metadataAccount) {
         console.log('Metadata account exists, updating via SetData');
-        return [
-            kitIxToWeb3(getSetDataInstruction({
-                metadata: metadataPda,
-                authority: authoritySigner,
-                buffer: bufferAddr,
-                program: programAddr,
-                programData: programDataAddr,
-                encoding: Encoding.Utf8,
-                compression: Compression.Zlib,
-                format: Format.Json,
-                dataSource: DataSource.Direct
-            }))
-        ];
+        const bufferAccount = await connection.getAccountInfo(bufferAddress, 'confirmed');
+        if (!bufferAccount) {
+            throw new Error(`Metadata buffer account ${bufferAddress.toString()} not found. ` +
+                'Make sure the buffer was created and is on the correct cluster.');
+        }
+        const newDataLength = bufferAccount.data.length > ACCOUNT_HEADER_LENGTH
+            ? bufferAccount.data.length - ACCOUNT_HEADER_LENGTH
+            : bufferAccount.data.length;
+        const currentDataLength = metadataAccount.data.length > ACCOUNT_HEADER_LENGTH
+            ? metadataAccount.data.length - ACCOUNT_HEADER_LENGTH
+            : metadataAccount.data.length;
+        const sizeDifference = newDataLength - currentDataLength;
+        console.log(`Current metadata data: ${currentDataLength} bytes, ` +
+            `new buffer data: ${newDataLength} bytes, ` +
+            `size difference: ${sizeDifference} bytes`);
+        const updateInstructions = [];
+        if (sizeDifference > 0) {
+            const extraRent = await connection.getMinimumBalanceForRentExemption(sizeDifference);
+            console.log(`Transferring ${extraRent} extra lamports for size increase`);
+            updateInstructions.push(SystemProgram.transfer({
+                fromPubkey: authority,
+                toPubkey: metadataPdaPubkey,
+                lamports: extraRent
+            }));
+            if (sizeDifference > REALLOC_LIMIT) {
+                let remaining = sizeDifference;
+                while (remaining > 0) {
+                    const chunk = Math.min(remaining, REALLOC_LIMIT);
+                    updateInstructions.push(kitIxToWeb3(getExtendInstruction({
+                        account: metadataPda,
+                        authority: authoritySigner,
+                        program: programAddr,
+                        programData: programDataAddr,
+                        length: chunk
+                    })));
+                    remaining -= chunk;
+                }
+            }
+        }
+        updateInstructions.push(kitIxToWeb3(getSetDataInstruction({
+            metadata: metadataPda,
+            authority: authoritySigner,
+            buffer: bufferAddr,
+            program: programAddr,
+            programData: programDataAddr,
+            encoding: Encoding.Utf8,
+            compression: Compression.Zlib,
+            format: Format.Json,
+            dataSource: DataSource.Direct
+        })));
+        return updateInstructions;
     }
     // Metadata account does not exist — follow the SDK's create flow:
     // Transfer -> Allocate -> Extend (if needed) -> Write -> Initialize
@@ -167959,6 +167997,10 @@ async function createMetadataInstructions(connection, programId, bufferAddress, 
         : bufferAccount.data.length;
     const accountSize = BigInt(ACCOUNT_HEADER_LENGTH) + BigInt(dataLength);
     const rentLamports = await connection.getMinimumBalanceForRentExemption(Number(accountSize));
+    console.log(`Buffer data: ${bufferAccount.data.length} bytes, ` +
+        `data portion: ${dataLength} bytes, ` +
+        `target account size: ${accountSize} bytes, ` +
+        `rent: ${rentLamports} lamports`);
     const instructions = [];
     // 1. Fund the metadata PDA with rent
     instructions.push(SystemProgram.transfer({

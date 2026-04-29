@@ -263,7 +263,69 @@ async function createMetadataInstructions(
 
   if (metadataAccount) {
     console.log('Metadata account exists, updating via SetData')
-    return [
+
+    const bufferAccount = await connection.getAccountInfo(
+      bufferAddress,
+      'confirmed'
+    )
+    if (!bufferAccount) {
+      throw new Error(
+        `Metadata buffer account ${bufferAddress.toString()} not found. ` +
+          'Make sure the buffer was created and is on the correct cluster.'
+      )
+    }
+
+    const newDataLength =
+      bufferAccount.data.length > ACCOUNT_HEADER_LENGTH
+        ? bufferAccount.data.length - ACCOUNT_HEADER_LENGTH
+        : bufferAccount.data.length
+    const currentDataLength =
+      metadataAccount.data.length > ACCOUNT_HEADER_LENGTH
+        ? metadataAccount.data.length - ACCOUNT_HEADER_LENGTH
+        : metadataAccount.data.length
+    const sizeDifference = newDataLength - currentDataLength
+
+    console.log(
+      `Current metadata data: ${currentDataLength} bytes, ` +
+        `new buffer data: ${newDataLength} bytes, ` +
+        `size difference: ${sizeDifference} bytes`
+    )
+
+    const updateInstructions: TransactionInstruction[] = []
+
+    if (sizeDifference > 0) {
+      const extraRent =
+        await connection.getMinimumBalanceForRentExemption(sizeDifference)
+      console.log(`Transferring ${extraRent} extra lamports for size increase`)
+      updateInstructions.push(
+        SystemProgram.transfer({
+          fromPubkey: authority,
+          toPubkey: metadataPdaPubkey,
+          lamports: extraRent
+        })
+      )
+
+      if (sizeDifference > REALLOC_LIMIT) {
+        let remaining = sizeDifference
+        while (remaining > 0) {
+          const chunk = Math.min(remaining, REALLOC_LIMIT)
+          updateInstructions.push(
+            kitIxToWeb3(
+              getExtendInstruction({
+                account: metadataPda,
+                authority: authoritySigner,
+                program: programAddr,
+                programData: programDataAddr,
+                length: chunk
+              })
+            )
+          )
+          remaining -= chunk
+        }
+      }
+    }
+
+    updateInstructions.push(
       kitIxToWeb3(
         getSetDataInstruction({
           metadata: metadataPda,
@@ -277,7 +339,9 @@ async function createMetadataInstructions(
           dataSource: DataSource.Direct
         })
       )
-    ]
+    )
+
+    return updateInstructions
   }
 
   // Metadata account does not exist — follow the SDK's create flow:
@@ -302,6 +366,13 @@ async function createMetadataInstructions(
   const accountSize = BigInt(ACCOUNT_HEADER_LENGTH) + BigInt(dataLength)
   const rentLamports = await connection.getMinimumBalanceForRentExemption(
     Number(accountSize)
+  )
+
+  console.log(
+    `Buffer data: ${bufferAccount.data.length} bytes, ` +
+      `data portion: ${dataLength} bytes, ` +
+      `target account size: ${accountSize} bytes, ` +
+      `rent: ${rentLamports} lamports`
   )
 
   const instructions: TransactionInstruction[] = []
