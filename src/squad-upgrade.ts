@@ -11,6 +11,15 @@ import {
 } from '@solana/web3.js'
 import { idlAddress } from '@coral-xyz/anchor/dist/cjs/idl.js'
 import { sendTransaction } from './transaction-helpers.js'
+import {
+  findCanonicalPda,
+  getSetDataInstruction,
+  Compression,
+  DataSource,
+  Encoding,
+  Format
+} from '@solana-program/program-metadata'
+import type { Address, TransactionSigner } from '@solana/kit'
 
 const BPF_UPGRADE_LOADER_ID = new PublicKey(
   'BPFLoaderUpgradeab1e11111111111111111111111'
@@ -21,6 +30,7 @@ export async function main({
   program,
   buffer,
   idlBuffer,
+  metadataBuffer,
   multisig: multisigAddress,
   keypair,
   vaultIndex,
@@ -31,6 +41,7 @@ export async function main({
   program: string
   buffer: string
   idlBuffer: string
+  metadataBuffer?: string
   multisig: string
   keypair: string
   vaultIndex: number
@@ -45,9 +56,21 @@ export async function main({
   const programId = new PublicKey(program)
   const programBuffer = new PublicKey(buffer)
   let idlBufferObj
+  let metadataBufferObj
 
-  if (idlBuffer != null) {
+  if (idlBuffer != null && idlBuffer !== '') {
     idlBufferObj = new PublicKey(idlBuffer)
+  }
+
+  if (metadataBuffer != null && metadataBuffer !== '') {
+    metadataBufferObj = new PublicKey(metadataBuffer)
+  }
+
+  if (idlBufferObj && metadataBufferObj) {
+    throw new Error(
+      'Cannot use both idl-buffer and metadata-buffer. ' +
+        'Use idl-buffer for Anchor IDL or metadata-buffer for program-metadata.'
+    )
   }
 
   // Get vault PDA (authority)
@@ -61,7 +84,9 @@ export async function main({
   console.log('Vault:', vaultPda.toString())
   console.log('Program:', programId.toString())
   console.log('Program Buffer:', programBuffer.toString())
-  console.log('IDL Buffer:', idlBufferObj?.toString())
+  if (idlBufferObj) console.log('Anchor IDL Buffer:', idlBufferObj.toString())
+  if (metadataBufferObj)
+    console.log('Metadata Buffer:', metadataBufferObj.toString())
   console.log('Extracted PDA transaction:', pdaTx?.toString())
 
   // Get current and new program sizes
@@ -84,7 +109,7 @@ export async function main({
   let instructions = []
   let memo = 'Program upgrade'
 
-  // Add IDL upgrade instruction if IDL buffer is provided
+  // Add Anchor IDL upgrade instruction if IDL buffer is provided
   if (idlBufferObj) {
     const idlUpgradeIx = await createIdlUpgradeInstruction(
       programId,
@@ -92,7 +117,18 @@ export async function main({
       vaultPda
     )
     instructions.push(idlUpgradeIx)
-    memo += ' with IDL update'
+    memo += ' with Anchor IDL update'
+  }
+
+  // Add program-metadata IDL instruction if metadata buffer is provided
+  if (metadataBufferObj) {
+    const metadataIx = await createMetadataSetDataInstruction(
+      programId,
+      metadataBufferObj,
+      vaultPda
+    )
+    instructions.push(metadataIx)
+    memo += ' with program-metadata IDL update'
   }
 
   // Add program upgrade instruction
@@ -161,6 +197,59 @@ export async function main({
     console.error('Error details:', error)
     process.exit(1)
   }
+}
+
+async function createMetadataSetDataInstruction(
+  programId: PublicKey,
+  bufferAddress: PublicKey,
+  authority: PublicKey
+): Promise<TransactionInstruction> {
+  const programAddr = programId.toBase58() as Address
+  const bufferAddr = bufferAddress.toBase58() as Address
+  const authorityAddr = authority.toBase58() as Address
+
+  const [metadataPda] = await findCanonicalPda({
+    program: programAddr,
+    seed: 'idl'
+  })
+
+  const [programDataAddress] = await PublicKey.findProgramAddress(
+    [programId.toBuffer()],
+    BPF_UPGRADE_LOADER_ID
+  )
+
+  console.log('\n=== Program Metadata Info ===')
+  console.log('Metadata PDA:', metadataPda)
+  console.log('Buffer:', bufferAddr)
+  console.log('Program Data:', programDataAddress.toString())
+
+  // Vault signs via the multisig mechanism, not directly here
+  const authoritySigner = {
+    address: authorityAddr
+  } as TransactionSigner
+
+  const ix = getSetDataInstruction({
+    metadata: metadataPda,
+    authority: authoritySigner,
+    buffer: bufferAddr,
+    program: programAddr,
+    programData: programDataAddress.toBase58() as Address,
+    encoding: Encoding.Utf8,
+    compression: Compression.Zlib,
+    format: Format.Json,
+    dataSource: DataSource.Direct
+  })
+
+  // Convert Kit instruction to web3.js TransactionInstruction
+  return new TransactionInstruction({
+    programId: new PublicKey(ix.programAddress),
+    keys: (ix.accounts as { address: string; role: number }[]).map((acc) => ({
+      pubkey: new PublicKey(acc.address),
+      isSigner: (acc.role & 2) !== 0,
+      isWritable: (acc.role & 1) !== 0
+    })),
+    data: Buffer.from(ix.data)
+  })
 }
 
 async function createIdlUpgradeInstruction(

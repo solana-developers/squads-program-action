@@ -13,6 +13,7 @@ export async function run(): Promise<void> {
     const program = core.getInput('program')
     const buffer = core.getInput('buffer')
     const idlBuffer = core.getInput('idl-buffer')
+    const metadataBuffer = core.getInput('metadata-buffer')
     const multisig = core.getInput('multisig')
     const keypair = core.getInput('keypair')
     const priorityFee = parseInt(core.getInput('priority-fee') || '100000', 10)
@@ -29,6 +30,7 @@ export async function run(): Promise<void> {
       program,
       buffer,
       idlBuffer,
+      metadataBuffer,
       multisig,
       keypair,
       vaultIndex,

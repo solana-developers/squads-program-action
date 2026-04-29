@@ -20,8 +20,13 @@ inputs:
     description: 'Buffer containing the new program'
     required: true
   idl-buffer:
-    description: 'Buffer containing the new IDL'
-    required: true
+    description: 'Buffer containing the new Anchor IDL'
+    required: false
+  metadata-buffer:
+    description:
+      'Buffer containing the new IDL for the program-metadata program
+      (alternative to idl-buffer for non-Anchor programs)'
+    required: false
   multisig:
     description: 'Squads multisig address'
     required: true
