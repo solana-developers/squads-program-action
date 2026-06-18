@@ -37,7 +37,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@actions/core": "^1.11.1",
+    "@actions/core": "^3.0.1",
     "@solana-program/program-metadata": "^0.5.1",
     "@sqds/multisig": "^2.1.3"
   },
