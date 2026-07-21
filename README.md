@@ -43,7 +43,7 @@ will automatically handle the build, upload, and verify steps.
     # Required: Squads multisig address
     multisig: ${{ secrets.MULTISIG }}
 
-    # Required: Byte array of the keypair. Needs to have at least voter permission in squads. Format: [23,42,53...]
+    # Required: Byte array of the keypair. Needs to have proposer permission in squads. Format: [23,42,53...]
     keypair: ${{ secrets.KEYPAIR }}
 
     # Optional: Priority fee in lamports for the transaction (default: 100000)
