@@ -37,8 +37,8 @@ inputs:
     required: true
   pda-tx:
     description:
-      'Base64 encoded PDA verification transaction. Get this from solana verify
-      cli using solana-verify export-pda-tx'
+      'Base58 or base64 encoded PDA verification transaction. Get this from
+      solana verify cli using solana-verify export-pda-tx'
     required: false
   priority-fee:
     description: 'Priority fee in lamports for the transaction'

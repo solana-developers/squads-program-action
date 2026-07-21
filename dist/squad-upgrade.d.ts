@@ -1,3 +1,4 @@
+import { Transaction } from '@solana/web3.js';
 export declare function main({ rpc, program, buffer, idlBuffer, metadataBuffer, multisig: multisigAddress, keypair, vaultIndex, priorityFee, pdaTx }: {
     rpc: string;
     program: string;
@@ -10,3 +11,4 @@ export declare function main({ rpc, program, buffer, idlBuffer, metadataBuffer, 
     priorityFee: number;
     pdaTx?: string;
 }): Promise<void>;
+export declare function parseVerificationTransaction(encodedTransaction: string): Promise<Transaction>;
