@@ -52,7 +52,7 @@ will automatically handle the build, upload, and verify steps.
     # Optional: Index of the Squads vault to use (default: 0)
     vault-index: 0
 
-    # Optional: Base64 encoded PDA verification transaction. Get this from solana verify cli using solana-verify export-pda-tx
+    # Optional: Base58 or base64 encoded PDA verification transaction. Get this from solana verify cli using solana-verify export-pda-tx
     pda-tx: ${{ secrets.PDA_TX }}
 ```
 

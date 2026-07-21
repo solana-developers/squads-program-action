@@ -32947,21 +32947,21 @@ function requireSrc$3 () {
 	return src$3;
 }
 
-var bs58$3;
+var bs58$4;
 var hasRequiredBs58$2;
 
 function requireBs58$2 () {
-	if (hasRequiredBs58$2) return bs58$3;
+	if (hasRequiredBs58$2) return bs58$4;
 	hasRequiredBs58$2 = 1;
 	var basex = requireSrc$3();
 	var ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
-	bs58$3 = basex(ALPHABET);
-	return bs58$3;
+	bs58$4 = basex(ALPHABET);
+	return bs58$4;
 }
 
 var bs58Exports = requireBs58$2();
-var bs58$2 = /*@__PURE__*/getDefaultExportFromCjs$1(bs58Exports);
+var bs58$3 = /*@__PURE__*/getDefaultExportFromCjs$1(bs58Exports);
 
 /**
  * SHA2-256 a.k.a. sha256. In JS, it is the fastest hash, even faster than Blake3.
@@ -33201,17 +33201,17 @@ function requireSrc$2 () {
 	return src$2;
 }
 
-var bs58$1;
+var bs58$2;
 var hasRequiredBs58$1;
 
 function requireBs58$1 () {
-	if (hasRequiredBs58$1) return bs58$1;
+	if (hasRequiredBs58$1) return bs58$2;
 	hasRequiredBs58$1 = 1;
 	var basex = requireSrc$2();
 	var ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
-	bs58$1 = basex(ALPHABET);
-	return bs58$1;
+	bs58$2 = basex(ALPHABET);
+	return bs58$2;
 }
 
 // This is free and unencumbered software released into the public domain.
@@ -126861,7 +126861,7 @@ class PublicKey extends Struct {
     } else {
       if (typeof value === 'string') {
         // assume base 58 encoding by default
-        const decoded = bs58$2.decode(value);
+        const decoded = bs58$3.decode(value);
         if (decoded.length != PUBLIC_KEY_LENGTH) {
           throw new Error(`Invalid public key input`);
         }
@@ -126900,7 +126900,7 @@ class PublicKey extends Struct {
    * Return the base-58 representation of the public key
    */
   toBase58() {
-    return bs58$2.encode(this.toBytes());
+    return bs58$3.encode(this.toBytes());
   }
   toJSON() {
     return this.toBase58();
@@ -127460,7 +127460,7 @@ class Message {
     return this.instructions.map(ix => ({
       programIdIndex: ix.programIdIndex,
       accountKeyIndexes: ix.accounts,
-      data: bs58$2.decode(ix.data)
+      data: bs58$3.decode(ix.data)
     }));
   }
   get addressTableLookups() {
@@ -127476,7 +127476,7 @@ class Message {
     const instructions = accountKeys.compileInstructions(args.instructions).map(ix => ({
       programIdIndex: ix.programIdIndex,
       accounts: ix.accountKeyIndexes,
-      data: bs58$2.encode(ix.data)
+      data: bs58$3.encode(ix.data)
     }));
     return new Message({
       header,
@@ -127518,7 +127518,7 @@ class Message {
         accounts,
         programIdIndex
       } = instruction;
-      const data = Array.from(bs58$2.decode(instruction.data));
+      const data = Array.from(bs58$3.decode(instruction.data));
       let keyIndicesCount = [];
       encodeLength(keyIndicesCount, accounts.length);
       let dataCount = [];
@@ -127549,7 +127549,7 @@ class Message {
       numReadonlyUnsignedAccounts: Buffer$1.from([this.header.numReadonlyUnsignedAccounts]),
       keyCount: Buffer$1.from(keyCount),
       keys: this.accountKeys.map(key => toBuffer(key.toBytes())),
-      recentBlockhash: bs58$2.decode(this.recentBlockhash)
+      recentBlockhash: bs58$3.decode(this.recentBlockhash)
     };
     let signData = Buffer$1.alloc(2048);
     const length = signDataLayout.encode(transaction, signData);
@@ -127584,7 +127584,7 @@ class Message {
       const accounts = guardedSplice(byteArray, 0, accountCount);
       const dataLength = decodeLength(byteArray);
       const dataSlice = guardedSplice(byteArray, 0, dataLength);
-      const data = bs58$2.encode(Buffer$1.from(dataSlice));
+      const data = bs58$3.encode(Buffer$1.from(dataSlice));
       instructions.push({
         programIdIndex,
         accounts,
@@ -127597,7 +127597,7 @@ class Message {
         numReadonlySignedAccounts,
         numReadonlyUnsignedAccounts
       },
-      recentBlockhash: bs58$2.encode(Buffer$1.from(recentBlockhash)),
+      recentBlockhash: bs58$3.encode(Buffer$1.from(recentBlockhash)),
       accountKeys,
       instructions
     };
@@ -127741,7 +127741,7 @@ class MessageV0 {
       header: this.header,
       staticAccountKeysLength: new Uint8Array(encodedStaticAccountKeysLength),
       staticAccountKeys: this.staticAccountKeys.map(key => key.toBytes()),
-      recentBlockhash: bs58$2.decode(this.recentBlockhash),
+      recentBlockhash: bs58$3.decode(this.recentBlockhash),
       instructionsLength: new Uint8Array(encodedInstructionsLength),
       serializedInstructions,
       addressTableLookupsLength: new Uint8Array(encodedAddressTableLookupsLength),
@@ -127804,7 +127804,7 @@ class MessageV0 {
     for (let i = 0; i < staticAccountKeysLength; i++) {
       staticAccountKeys.push(new PublicKey(guardedSplice(byteArray, 0, PUBLIC_KEY_LENGTH)));
     }
-    const recentBlockhash = bs58$2.encode(guardedSplice(byteArray, 0, PUBLIC_KEY_LENGTH));
+    const recentBlockhash = bs58$3.encode(guardedSplice(byteArray, 0, PUBLIC_KEY_LENGTH));
     const instructionCount = decodeLength(byteArray);
     const compiledInstructions = [];
     for (let i = 0; i < instructionCount; i++) {
@@ -128293,7 +128293,7 @@ class Transaction {
       return {
         programIdIndex: accountKeys.indexOf(programId.toString()),
         accounts: instruction.keys.map(meta => accountKeys.indexOf(meta.pubkey.toString())),
-        data: bs58$2.encode(data)
+        data: bs58$3.encode(data)
       };
     });
     compiledInstructions.forEach(instruction => {
@@ -128618,7 +128618,7 @@ class Transaction {
     let signatures = [];
     for (let i = 0; i < signatureCount; i++) {
       const signature = guardedSplice(byteArray, 0, SIGNATURE_LENGTH_IN_BYTES);
-      signatures.push(bs58$2.encode(Buffer$1.from(signature)));
+      signatures.push(bs58$3.encode(Buffer$1.from(signature)));
     }
     return Transaction.populate(Message.from(byteArray), signatures);
   }
@@ -128639,7 +128639,7 @@ class Transaction {
     }
     signatures.forEach((signature, index) => {
       const sigPubkeyPair = {
-        signature: signature == bs58$2.encode(DEFAULT_SIGNATURE) ? null : bs58$2.decode(signature),
+        signature: signature == bs58$3.encode(DEFAULT_SIGNATURE) ? null : bs58$3.decode(signature),
         publicKey: message.accountKeys[index]
       };
       transaction.signatures.push(sigPubkeyPair);
@@ -128656,7 +128656,7 @@ class Transaction {
       transaction.instructions.push(new TransactionInstruction({
         keys,
         programId: message.accountKeys[instruction.programIdIndex],
-        data: bs58$2.decode(instruction.data)
+        data: bs58$3.decode(instruction.data)
       }));
     });
     transaction._message = message;
@@ -131318,7 +131318,7 @@ function versionedMessageFromResponse(version, response) {
       compiledInstructions: response.instructions.map(ix => ({
         programIdIndex: ix.programIdIndex,
         accountKeyIndexes: ix.accounts,
-        data: bs58$2.decode(ix.data)
+        data: bs58$3.decode(ix.data)
       })),
       addressTableLookups: response.addressTableLookups
     });
@@ -133216,7 +133216,7 @@ class Connection {
     }
     let decodedSignature;
     try {
-      decodedSignature = bs58$2.decode(rawSignature);
+      decodedSignature = bs58$3.decode(rawSignature);
     } catch (err) {
       throw new Error('signature must be base58 encoded: ' + rawSignature);
     }
@@ -141622,17 +141622,17 @@ function requireSrc () {
 	return src;
 }
 
-var bs58;
+var bs58$1;
 var hasRequiredBs58;
 
 function requireBs58 () {
-	if (hasRequiredBs58) return bs58;
+	if (hasRequiredBs58) return bs58$1;
 	hasRequiredBs58 = 1;
 	const basex = requireSrc();
 	const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
-	bs58 = basex(ALPHABET);
-	return bs58;
+	bs58$1 = basex(ALPHABET);
+	return bs58$1;
 }
 
 var hasRequiredUtil;
@@ -153282,6 +153282,129 @@ function requireIdl () {
 }
 
 var idlExports = requireIdl();
+
+// base-x encoding / decoding
+// Copyright (c) 2018 base-x contributors
+// Copyright (c) 2014-2018 The Bitcoin Core developers (base58.cpp)
+// Distributed under the MIT software license, see the accompanying
+// file LICENSE or http://www.opensource.org/licenses/mit-license.php.
+function base (ALPHABET) {
+  if (ALPHABET.length >= 255) { throw new TypeError('Alphabet too long') }
+  const BASE_MAP = new Uint8Array(256);
+  for (let j = 0; j < BASE_MAP.length; j++) {
+    BASE_MAP[j] = 255;
+  }
+  for (let i = 0; i < ALPHABET.length; i++) {
+    const x = ALPHABET.charAt(i);
+    const xc = x.charCodeAt(0);
+    if (BASE_MAP[xc] !== 255) { throw new TypeError(x + ' is ambiguous') }
+    BASE_MAP[xc] = i;
+  }
+  const BASE = ALPHABET.length;
+  const LEADER = ALPHABET.charAt(0);
+  const FACTOR = Math.log(BASE) / Math.log(256); // log(BASE) / log(256), rounded up
+  const iFACTOR = Math.log(256) / Math.log(BASE); // log(256) / log(BASE), rounded up
+  function encode (source) {
+    // eslint-disable-next-line no-empty
+    if (source instanceof Uint8Array) ; else if (ArrayBuffer.isView(source)) {
+      source = new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
+    } else if (Array.isArray(source)) {
+      source = Uint8Array.from(source);
+    }
+    if (!(source instanceof Uint8Array)) { throw new TypeError('Expected Uint8Array') }
+    if (source.length === 0) { return '' }
+    // Skip & count leading zeroes.
+    let zeroes = 0;
+    let length = 0;
+    let pbegin = 0;
+    const pend = source.length;
+    while (pbegin !== pend && source[pbegin] === 0) {
+      pbegin++;
+      zeroes++;
+    }
+    // Allocate enough space in big-endian base58 representation.
+    const size = ((pend - pbegin) * iFACTOR + 1) >>> 0;
+    const b58 = new Uint8Array(size);
+    // Process the bytes.
+    while (pbegin !== pend) {
+      let carry = source[pbegin];
+      // Apply "b58 = b58 * 256 + ch".
+      let i = 0;
+      for (let it1 = size - 1; (carry !== 0 || i < length) && (it1 !== -1); it1--, i++) {
+        carry += (256 * b58[it1]) >>> 0;
+        b58[it1] = (carry % BASE) >>> 0;
+        carry = (carry / BASE) >>> 0;
+      }
+      if (carry !== 0) { throw new Error('Non-zero carry') }
+      length = i;
+      pbegin++;
+    }
+    // Skip leading zeroes in base58 result.
+    let it2 = size - length;
+    while (it2 !== size && b58[it2] === 0) {
+      it2++;
+    }
+    // Translate the result into a string.
+    let str = LEADER.repeat(zeroes);
+    for (; it2 < size; ++it2) { str += ALPHABET.charAt(b58[it2]); }
+    return str
+  }
+  function decodeUnsafe (source) {
+    if (typeof source !== 'string') { throw new TypeError('Expected String') }
+    if (source.length === 0) { return new Uint8Array() }
+    let psz = 0;
+    // Skip and count leading '1's.
+    let zeroes = 0;
+    let length = 0;
+    while (source[psz] === LEADER) {
+      zeroes++;
+      psz++;
+    }
+    // Allocate enough space in big-endian base256 representation.
+    const size = (((source.length - psz) * FACTOR) + 1) >>> 0; // log(58) / log(256), rounded up.
+    const b256 = new Uint8Array(size);
+    // Process the characters.
+    while (source[psz]) {
+      // Decode character
+      let carry = BASE_MAP[source.charCodeAt(psz)];
+      // Invalid character
+      if (carry === 255) { return }
+      let i = 0;
+      for (let it3 = size - 1; (carry !== 0 || i < length) && (it3 !== -1); it3--, i++) {
+        carry += (BASE * b256[it3]) >>> 0;
+        b256[it3] = (carry % 256) >>> 0;
+        carry = (carry / 256) >>> 0;
+      }
+      if (carry !== 0) { throw new Error('Non-zero carry') }
+      length = i;
+      psz++;
+    }
+    // Skip leading zeroes in b256.
+    let it4 = size - length;
+    while (it4 !== size && b256[it4] === 0) {
+      it4++;
+    }
+    const vch = new Uint8Array(zeroes + (size - it4));
+    let j = zeroes;
+    while (it4 !== size) {
+      vch[j++] = b256[it4++];
+    }
+    return vch
+  }
+  function decode (string) {
+    const buffer = decodeUnsafe(string);
+    if (buffer) { return buffer }
+    throw new Error('Non-base' + BASE + ' character')
+  }
+  return {
+    encode,
+    decodeUnsafe,
+    decode
+  }
+}
+
+var ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+var bs58 = base(ALPHABET);
 
 // Was getSimulationUnits
 // Credit https://twitter.com/stegabob, originally from
@@ -168087,11 +168210,22 @@ async function createProgramUpgradeInstruction(programId, bufferAddress, upgrade
         data: Buffer.from([3, 0, 0, 0])
     });
 }
-async function parseVerificationTransaction(base64String) {
-    // Decode base64 to buffer
-    const buffer = Buffer.from(base64String, 'base64');
-    // Parse into versioned transaction
-    return Transaction.from(buffer);
+async function parseVerificationTransaction(encodedTransaction) {
+    const value = encodedTransaction.trim();
+    try {
+        return Transaction.from(Buffer.from(value, 'base64'));
+    }
+    catch (base64Error) {
+        try {
+            return Transaction.from(Buffer.from(bs58.decode(value)));
+        }
+        catch (base58Error) {
+            const base64Message = base64Error instanceof Error ? base64Error.message : String(base64Error);
+            const base58Message = base58Error instanceof Error ? base58Error.message : String(base58Error);
+            throw new Error('Unable to decode PDA verification transaction as base64 or base58. ' +
+                `Base64 error: ${base64Message}. Base58 error: ${base58Message}.`);
+        }
+    }
 }
 async function getAccountInfoWithRetry(connection, pubkey, retries = 5, delay = 1000) {
     for (let i = 0; i < retries; i++) {

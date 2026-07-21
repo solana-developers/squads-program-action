@@ -11,6 +11,7 @@ import {
   SystemProgram
 } from '@solana/web3.js'
 import { idlAddress } from '@coral-xyz/anchor/dist/cjs/idl.js'
+import bs58 from 'bs58'
 import { sendTransaction } from './transaction-helpers.js'
 import {
   ACCOUNT_HEADER_LENGTH,
@@ -504,14 +505,28 @@ async function createProgramUpgradeInstruction(
   })
 }
 
-async function parseVerificationTransaction(
-  base64String: string
+export async function parseVerificationTransaction(
+  encodedTransaction: string
 ): Promise<Transaction> {
-  // Decode base64 to buffer
-  const buffer = Buffer.from(base64String, 'base64')
+  const value = encodedTransaction.trim()
 
-  // Parse into versioned transaction
-  return Transaction.from(buffer)
+  try {
+    return Transaction.from(Buffer.from(value, 'base64'))
+  } catch (base64Error) {
+    try {
+      return Transaction.from(Buffer.from(bs58.decode(value)))
+    } catch (base58Error) {
+      const base64Message =
+        base64Error instanceof Error ? base64Error.message : String(base64Error)
+      const base58Message =
+        base58Error instanceof Error ? base58Error.message : String(base58Error)
+
+      throw new Error(
+        'Unable to decode PDA verification transaction as base64 or base58. ' +
+          `Base64 error: ${base64Message}. Base58 error: ${base58Message}.`
+      )
+    }
+  }
 }
 
 async function getAccountInfoWithRetry(
