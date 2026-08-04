@@ -145,6 +145,33 @@ jobs:
           vault-index: 0
 ```
 
+## Example Workflow (Export Only, No Squads Membership)
+
+Set `export: 'true'` to output the combined transaction instead of creating the
+Squads vault transaction. No keypair or Squads membership is required. A
+multisig member imports the output into the
+[Squads transaction builder](https://v4.squads.so/) to create the proposal — one
+import, one approval.
+
+```yaml
+- uses: solana-foundation/squads-program-action@v0.4.4
+  id: export-squads-tx
+  with:
+    rpc: ${{ secrets.RPC_URL }}
+    program: BhV84MZrRnEvtWLdWMRJGJr1GbusxfVMHAwc3pq92g4z
+    buffer: ${{ inputs.buffer }}
+    metadata-buffer: ${{ steps.metadata-buffer.outputs.buffer }}
+    multisig: ${{ secrets.MULTISIG }}
+    export: 'true'
+    export-encoding: base58
+
+- run: echo "${{ steps.export-squads-tx.outputs.tx }}"
+```
+
+The export contains all instructions (program upgrade, IDL update, PDA
+verification) in one transaction. If they exceed the 1232 byte transaction size
+limit, the action fails instead of exporting a partial transaction.
+
 ## What Happens After Running
 
 1. The action creates a transaction in your Squads multisig containing:
