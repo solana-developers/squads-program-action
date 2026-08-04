@@ -167916,9 +167916,15 @@ function getWriteInstruction(input, config) {
 var ACCOUNT_HEADER_LENGTH = 96;
 
 const REALLOC_LIMIT = 10240;
+const MAX_TRANSACTION_BYTES = 1232;
 const BPF_UPGRADE_LOADER_ID = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
-async function main({ rpc, program, buffer, idlBuffer, metadataBuffer, multisig: multisigAddress, keypair, vaultIndex, priorityFee, pdaTx }) {
-    const keypairObj = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(keypair)));
+async function main({ rpc, program, buffer, idlBuffer, metadataBuffer, multisig: multisigAddress, keypair, vaultIndex, priorityFee, pdaTx, exportOnly, exportEncoding }) {
+    if (!exportOnly && !keypair) {
+        throw new Error('keypair is required unless export is true');
+    }
+    const keypairObj = keypair
+        ? Keypair.fromSecretKey(Uint8Array.from(JSON.parse(keypair)))
+        : undefined;
     const connection = new Connection(rpc);
     const multisigPda = new PublicKey(multisigAddress);
     const programId = new PublicKey(program);
@@ -167957,7 +167963,7 @@ async function main({ rpc, program, buffer, idlBuffer, metadataBuffer, multisig:
         throw new Error('Could not fetch program or buffer account');
     }
     // Create both upgrade instructions
-    const programUpgradeIx = await createProgramUpgradeInstruction(programId, programBuffer, vaultPda, keypairObj.publicKey);
+    const programUpgradeIx = await createProgramUpgradeInstruction(programId, programBuffer, vaultPda, keypairObj?.publicKey ?? vaultPda);
     // Build transaction message with all instructions
     let instructions = [];
     let memo = 'Program upgrade';
@@ -167983,6 +167989,16 @@ async function main({ rpc, program, buffer, idlBuffer, metadataBuffer, multisig:
             instructions = [verificationTx.instructions[1], ...instructions];
             memo += ' and PDA verification';
         }
+    }
+    if (exportOnly) {
+        const encoded = buildExportTransaction(instructions, vaultPda, (await connection.getLatestBlockhash()).blockhash, exportEncoding);
+        console.log('\n=== Exported Combined Transaction ===');
+        console.log('Import this transaction into the Squads transaction builder to create the upgrade proposal:');
+        console.log(encoded);
+        return encoded;
+    }
+    if (!keypairObj) {
+        throw new Error('keypair is required unless export is true');
     }
     const message = new TransactionMessage({
         payerKey: vaultPda,
@@ -168210,6 +168226,28 @@ async function createProgramUpgradeInstruction(programId, bufferAddress, upgrade
         data: Buffer.from([3, 0, 0, 0])
     });
 }
+function buildExportTransaction(instructions, feePayer, recentBlockhash, encoding = 'base58') {
+    const transaction = new Transaction();
+    transaction.feePayer = feePayer;
+    transaction.recentBlockhash = recentBlockhash;
+    transaction.add(...instructions);
+    let wire;
+    try {
+        wire = transaction.serialize({
+            requireAllSignatures: false,
+            verifySignatures: false
+        });
+    }
+    catch (error) {
+        throw new Error(`Combined transaction exceeds the ${MAX_TRANSACTION_BYTES} byte ` +
+            'transaction limit. Export the verify, IDL, and upgrade ' +
+            'transactions separately instead. Serialization error: ' +
+            (error instanceof Error ? error.message : String(error)));
+    }
+    return encoding === 'base64'
+        ? Buffer.from(wire).toString('base64')
+        : bs58.encode(wire);
+}
 async function parseVerificationTransaction(encodedTransaction) {
     const value = encodedTransaction.trim();
     try {
@@ -168273,13 +168311,17 @@ async function run() {
         const priorityFee = parseInt(coreExports.getInput('priority-fee') || '100000', 10);
         const vaultIndex = parseInt(coreExports.getInput('vault-index') || '0', 10);
         const pdaTx = coreExports.getInput('pda-tx');
+        const exportOnly = coreExports.getInput('export') === 'true';
+        const exportEncoding = coreExports.getInput('export-encoding') || 'base58';
         // Validate numeric inputs
         if (isNaN(priorityFee))
             throw new Error('Invalid priority fee');
         if (isNaN(vaultIndex))
             throw new Error('Invalid vault index');
+        if (exportEncoding !== 'base58' && exportEncoding !== 'base64')
+            throw new Error('Invalid export encoding, use base58 or base64');
         // Call the squad-upgrade main function with the inputs
-        await main({
+        const exportedTx = await main({
             rpc,
             program,
             buffer,
@@ -168289,8 +168331,12 @@ async function run() {
             keypair,
             vaultIndex,
             priorityFee,
-            pdaTx
+            pdaTx,
+            exportOnly,
+            exportEncoding
         });
+        if (exportedTx)
+            coreExports.setOutput('tx', exportedTx);
     }
     catch (error) {
         // Fail the workflow run if an error occurs

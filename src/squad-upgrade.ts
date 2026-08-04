@@ -30,6 +30,8 @@ import type { Address, TransactionSigner } from '@solana/kit'
 
 const REALLOC_LIMIT = 10240
 
+const MAX_TRANSACTION_BYTES = 1232
+
 const BPF_UPGRADE_LOADER_ID = new PublicKey(
   'BPFLoaderUpgradeab1e11111111111111111111111'
 )
@@ -44,7 +46,9 @@ export async function main({
   keypair,
   vaultIndex,
   priorityFee,
-  pdaTx
+  pdaTx,
+  exportOnly,
+  exportEncoding
 }: {
   rpc: string
   program: string
@@ -56,8 +60,16 @@ export async function main({
   vaultIndex: number
   priorityFee: number
   pdaTx?: string
-}) {
-  const keypairObj = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(keypair)))
+  exportOnly?: boolean
+  exportEncoding?: 'base58' | 'base64'
+}): Promise<string | undefined> {
+  if (!exportOnly && !keypair) {
+    throw new Error('keypair is required unless export is true')
+  }
+
+  const keypairObj = keypair
+    ? Keypair.fromSecretKey(Uint8Array.from(JSON.parse(keypair)))
+    : undefined
 
   const connection = new Connection(rpc)
 
@@ -111,7 +123,7 @@ export async function main({
     programId,
     programBuffer,
     vaultPda,
-    keypairObj.publicKey
+    keypairObj?.publicKey ?? vaultPda
   )
 
   // Build transaction message with all instructions
@@ -152,6 +164,26 @@ export async function main({
       instructions = [verificationTx.instructions[1], ...instructions]
       memo += ' and PDA verification'
     }
+  }
+
+  if (exportOnly) {
+    const encoded = buildExportTransaction(
+      instructions,
+      vaultPda,
+      (await connection.getLatestBlockhash()).blockhash,
+      exportEncoding
+    )
+
+    console.log('\n=== Exported Combined Transaction ===')
+    console.log(
+      'Import this transaction into the Squads transaction builder to create the upgrade proposal:'
+    )
+    console.log(encoded)
+    return encoded
+  }
+
+  if (!keypairObj) {
+    throw new Error('keypair is required unless export is true')
   }
 
   const message = new TransactionMessage({
@@ -503,6 +535,37 @@ async function createProgramUpgradeInstruction(
     programId: BPF_UPGRADE_LOADER_ID,
     data: Buffer.from([3, 0, 0, 0])
   })
+}
+
+export function buildExportTransaction(
+  instructions: TransactionInstruction[],
+  feePayer: PublicKey,
+  recentBlockhash: string,
+  encoding: 'base58' | 'base64' = 'base58'
+): string {
+  const transaction = new Transaction()
+  transaction.feePayer = feePayer
+  transaction.recentBlockhash = recentBlockhash
+  transaction.add(...instructions)
+
+  let wire: Buffer
+  try {
+    wire = transaction.serialize({
+      requireAllSignatures: false,
+      verifySignatures: false
+    })
+  } catch (error) {
+    throw new Error(
+      `Combined transaction exceeds the ${MAX_TRANSACTION_BYTES} byte ` +
+        'transaction limit. Export the verify, IDL, and upgrade ' +
+        'transactions separately instead. Serialization error: ' +
+        (error instanceof Error ? error.message : String(error))
+    )
+  }
+
+  return encoding === 'base64'
+    ? Buffer.from(wire).toString('base64')
+    : bs58.encode(wire)
 }
 
 export async function parseVerificationTransaction(
