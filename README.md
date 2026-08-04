@@ -148,10 +148,10 @@ jobs:
 ## Example Workflow (Export Only, No Squads Membership)
 
 Set `export: 'true'` to output the combined transaction instead of creating the
-Squads vault transaction. A multisig member imports it once into the
-[Squads transaction builder](https://v4.squads.so/) to create the proposal. In
-this mode no keypair is needed, so the CI keys do not need any Squads membership
-— useful when you cannot add a proposer key to the multisig.
+Squads vault transaction. No keypair or Squads membership is required. A
+multisig member imports the output into the
+[Squads transaction builder](https://v4.squads.so/) to create the proposal — one
+import, one approval.
 
 ```yaml
 - uses: solana-foundation/squads-program-action@v0.4.4
@@ -168,11 +168,9 @@ this mode no keypair is needed, so the CI keys do not need any Squads membership
 - run: echo "${{ steps.export-squads-tx.outputs.tx }}"
 ```
 
-The exported transaction contains all instructions (program upgrade, IDL update,
-PDA verification) in one transaction, so the release is still a single import
-and a single approval. If the combined instructions exceed the 1232 byte
-transaction size limit the action fails with an error instead of exporting a
-partial transaction.
+The export contains all instructions (program upgrade, IDL update, PDA
+verification) in one transaction. If they exceed the 1232 byte transaction size
+limit, the action fails instead of exporting a partial transaction.
 
 ## What Happens After Running
 

@@ -51,9 +51,8 @@ inputs:
   export:
     description:
       'Export the combined transaction instead of creating the Squads vault
-      transaction. Import the exported transaction into the Squads transaction
-      builder to create the proposal. No keypair or Squads membership is needed
-      in this mode.'
+      transaction. No keypair or Squads membership needed; import the output
+      into the Squads transaction builder to create the proposal.'
     required: false
     default: 'false'
   export-encoding:
@@ -65,9 +64,7 @@ outputs:
   time:
     description: Signature of the squads transaction
   tx:
-    description:
-      'Exported combined transaction in the chosen encoding (only set if export
-      is true)'
+    description: 'Exported combined transaction (only set if export is true)'
 
 runs:
   using: node20
