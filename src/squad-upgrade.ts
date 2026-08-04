@@ -24,7 +24,8 @@ import {
   Compression,
   DataSource,
   Encoding,
-  Format
+  Format,
+  PROGRAM_METADATA_PROGRAM_ADDRESS
 } from '@solana-program/program-metadata'
 import type { Address, TransactionSigner } from '@solana/kit'
 
@@ -34,6 +35,10 @@ const MAX_TRANSACTION_BYTES = 1232
 
 const BPF_UPGRADE_LOADER_ID = new PublicKey(
   'BPFLoaderUpgradeab1e11111111111111111111111'
+)
+
+const PROGRAM_METADATA_PROGRAM_ID = new PublicKey(
+  PROGRAM_METADATA_PROGRAM_ADDRESS
 )
 
 export async function main({
@@ -293,8 +298,14 @@ async function createMetadataInstructions(
     metadataPdaPubkey,
     'confirmed'
   )
+  // A CI pre-fund creates a system-owned account at the PDA before Allocate.
+  // Treat anything not owned by program-metadata as "does not exist yet".
+  const existingMetadata =
+    metadataAccount && metadataAccount.owner.equals(PROGRAM_METADATA_PROGRAM_ID)
+      ? metadataAccount
+      : null
 
-  if (metadataAccount) {
+  if (existingMetadata) {
     console.log('Metadata account exists, updating via SetData')
 
     const bufferAccount = await connection.getAccountInfo(
@@ -313,9 +324,9 @@ async function createMetadataInstructions(
         ? bufferAccount.data.length - ACCOUNT_HEADER_LENGTH
         : bufferAccount.data.length
     const currentDataLength =
-      metadataAccount.data.length > ACCOUNT_HEADER_LENGTH
-        ? metadataAccount.data.length - ACCOUNT_HEADER_LENGTH
-        : metadataAccount.data.length
+      existingMetadata.data.length > ACCOUNT_HEADER_LENGTH
+        ? existingMetadata.data.length - ACCOUNT_HEADER_LENGTH
+        : existingMetadata.data.length
     const sizeDifference = newDataLength - currentDataLength
 
     console.log(
@@ -327,16 +338,31 @@ async function createMetadataInstructions(
     const updateInstructions: TransactionInstruction[] = []
 
     if (sizeDifference > 0) {
-      const extraRent =
-        await connection.getMinimumBalanceForRentExemption(sizeDifference)
-      console.log(`Transferring ${extraRent} extra lamports for size increase`)
-      updateInstructions.push(
-        SystemProgram.transfer({
-          fromPubkey: authority,
-          toPubkey: metadataPdaPubkey,
-          lamports: extraRent
-        })
+      // Prefer rent already sitting on the metadata account (e.g. CI pre-fund).
+      // Only transfer the shortfall from the vault — a zero shortfall means no
+      // SystemProgram.transfer, which Squads otherwise marks as insecure.
+      const requiredRent = await connection.getMinimumBalanceForRentExemption(
+        existingMetadata.data.length + sizeDifference
       )
+      const shortfall = Math.max(0, requiredRent - existingMetadata.lamports)
+      if (shortfall > 0) {
+        console.log(
+          `Transferring ${shortfall} lamports shortfall for size increase ` +
+            `(required ${requiredRent}, have ${existingMetadata.lamports})`
+        )
+        updateInstructions.push(
+          SystemProgram.transfer({
+            fromPubkey: authority,
+            toPubkey: metadataPdaPubkey,
+            lamports: shortfall
+          })
+        )
+      } else {
+        console.log(
+          `Metadata account already rent-funded for new size ` +
+            `(${existingMetadata.lamports} >= ${requiredRent}); skipping SystemProgram.transfer`
+        )
+      }
 
       if (sizeDifference > REALLOC_LIMIT) {
         let remaining = sizeDifference
@@ -410,14 +436,29 @@ async function createMetadataInstructions(
 
   const instructions: TransactionInstruction[] = []
 
-  // 1. Fund the metadata PDA with rent
-  instructions.push(
-    SystemProgram.transfer({
-      fromPubkey: authority,
-      toPubkey: metadataPdaPubkey,
-      lamports: rentLamports
-    })
-  )
+  // 1. Fund the metadata PDA with rent only if CI did not already pre-fund it.
+  // CreateAccountAllowPrefund accepts a system-owned pre-funded PDA.
+  // `metadataAccount` here may be a system-owned pre-fund from CI.
+  const existingLamports = metadataAccount?.lamports ?? 0
+  const initShortfall = Math.max(0, rentLamports - existingLamports)
+  if (initShortfall > 0) {
+    console.log(
+      `Funding new metadata PDA with ${initShortfall} lamports ` +
+        `(required ${rentLamports}, have ${existingLamports})`
+    )
+    instructions.push(
+      SystemProgram.transfer({
+        fromPubkey: authority,
+        toPubkey: metadataPdaPubkey,
+        lamports: initShortfall
+      })
+    )
+  } else {
+    console.log(
+      `Metadata PDA already pre-funded with ${existingLamports} lamports; ` +
+        `skipping SystemProgram.transfer`
+    )
+  }
 
   // 2. Allocate the PDA as a program-metadata buffer
   instructions.push(
