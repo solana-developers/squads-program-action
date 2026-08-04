@@ -32,8 +32,8 @@ inputs:
     required: true
   keypair:
     description:
-      'Byte array of the keypair. Needs to have at least voter permission in
-      squads. Format: [23,42,53...]. Not required when export is true.'
+      'Byte array of the keypair. Needs at least proposer permission in squads.
+      Format: [23,42,53...]. Not required when export is true.'
     required: false
   pda-tx:
     description:
